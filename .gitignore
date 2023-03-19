@@ -1,0 +1,4 @@
+*.txt
+.env
+*/trajectories
+__pycache__
