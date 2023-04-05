@@ -3,6 +3,9 @@ import math
 from time import time, sleep
 from communication.protocol import Protocol
 
+
+PAYLOAD_SIZE = 27
+
 def avg(l):
     return sum(l)/len(l)
 
@@ -47,9 +50,16 @@ class Connection:
         print("Disconnected")
         pass
 
+    def get_states(self):
+        self.request_states()
+        return self.receive_states()
+
     def receive(self):
+        while self.serial_port.in_waiting < PAYLOAD_SIZE:
+            continue
         try:
-            return self.serial_port.readline().decode('ASCII')
+            read = self.serial_port.readline().decode('ASCII')
+            return read
         except:
             print("ERROR")
     def receive_states(self):
@@ -57,7 +67,7 @@ class Connection:
         if serial_string is None:
             print("ERROR: receiving")
             return
-            #return self.last_state
+
         self.last_state = serial_string
         if serial_string.startswith(Protocol.ANS_GET_STATES.value):
             # remove first character
@@ -65,22 +75,15 @@ class Connection:
             # remove last character
             serial_string = serial_string[:-1]
             serial_list = serial_string.split(Protocol.DELIM.value)
-            return self.convert_to_float(serial_list)
-        print("Get states error")
+            serial_list = [float(val) for val in serial_list]
+            return serial_list
+        print("Protocol violation: receive_states()")
 
-    def convert_to_float(self, s):
-        out = []
-        for item in s:
-            out.append(float(item))
-        return out
 
     def request_states(self):
         self.serial_port.write(bytes(Protocol.COM_GET_STATES.value + Protocol.COM_END.value,'ASCII'))
     def writeouput(self,angle,speed):
         self.serial_port.write(bytes(Protocol.COM_WRITEOUTPUT.value +str(round(angle,7))+ Protocol.DELIM.value + str(round(speed,7)) +Protocol.COM_END.value,'ASCII'))
-        #serial_string = self.receive()
-        #if not serial_string.startswith(Protocol.ANS_WRITE_OUTPUT.value):
-            #print("FAILED")
 
     def flush(self):
         self.serial_port.flushInput()
