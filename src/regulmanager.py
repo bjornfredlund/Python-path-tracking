@@ -1,4 +1,5 @@
 import threading
+from threading import Event
 from dataclasses import dataclass
 from trajectory import Trajectory
 from logger import Logger
@@ -10,8 +11,9 @@ from regulators.regul_not_sim import Regul_not_sim
 
 
 class Regulmanager(threading.Thread):
-    def __init__(self, plotter, queue, HOST):
+    def __init__(self, plotter, queue, HOST, event):
         threading.Thread.__init__(self)
+        self.event = event
         self.plotter = plotter
         self.q = queue 
         self.HOST = HOST
@@ -46,6 +48,6 @@ class Regulmanager(threading.Thread):
             #try:
 
             m, c, t = self.process_data(data)
-            m.regul(log, c, t, self.plotter, v_ref = data.v)
+            m.regul(log, c, t, self.plotter, data.v, self.event)
             #except:
                 #log.close_files()

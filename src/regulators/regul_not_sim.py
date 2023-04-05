@@ -76,13 +76,10 @@ class Regul_not_sim(Mode):
             #states.yaw = yaw
 
 
-    def regul(self, log, controller, t, plotter , v_ref):
+    def regul(self, log, controller, t, plotter , v_ref, event):
         with Connection(self.HOST) as rc:
             self.wait_calibrated(rc, plotter)
             sleep(1.0)
-
-            log.log_trajectory(t.coords)
-            log.log_orientation(t.orientation_ref)
 
             # first point is our starting point
             p = t.next_point()
@@ -100,10 +97,10 @@ class Regul_not_sim(Mode):
             j = 0
             t0 = time()
             while True:
+                if event.is_set():
+                    break
                 t1 = time()
-                rc.request_states()
-                sleep(0.04)
-                response = rc.receive_states()
+                response = rc.get_states()
 
                 self.process_response(response, state)
                 current_target_idx, error_front_axle = t.calc_target(state)

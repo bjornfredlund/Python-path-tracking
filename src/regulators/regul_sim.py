@@ -16,22 +16,22 @@ CONTROLLER_PERIOD = 0.15
 class Regul_sim(Mode):
     def __init__(self):
         pass
-    def regul(self, log, controller, t, plotter , v_ref):
-        log.log_trajectory(t.coords)
-        log.log_orientation(t.orientation_ref)
-
-        # j, number of iterations
-        j = 0
-
+    def regul(self, log, controller, t, plotter , v_ref, event):
         # first point is our starting point
         p = t.next_point()
  
         state = State(p.x,p.y, p.orientation, v = v_ref, t = CONTROLLER_PERIOD )
         error = [0]
         last_target_idx, _ = t.calc_target(state)
-        # lägg till dummy punkt på slutet av point_list
 
+        # j, number of iterations
+        j = 0
+        t0 = time()
         while True:
+            if event.is_set():
+                break
+            t1 = time()
+
             current_target_idx, error_front_axle = t.calc_target(state)
 
             # is the new point already passed?
@@ -47,7 +47,7 @@ class Regul_sim(Mode):
 
             state.update_state_space(control_signal, v_ref)
     
-            timestamp = j*CONTROLLER_PERIOD
+            timestamp = time() - t0
 
             target_x, target_y = t.get_targets(current_target_idx)
 
@@ -64,7 +64,12 @@ class Regul_sim(Mode):
             if t.is_done(current_target_idx):
                 break
 
-            sleep(0.1)
+            duration = CONTROLLER_PERIOD - (time() - t1)
+
+            if duration > 0:
+                sleep(duration)
+            else:
+                print("Lagging behind...")
     
         print(f'Goal Has been reached successfully in {j} iterations\nTime {round(j*CONTROLLER_PERIOD,1)}s, average error {round(self.average(error),3)}')
     

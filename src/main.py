@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Event
 from multiprocessing import Process
 from plotter import Plotter
 from queue import Queue
@@ -14,17 +14,14 @@ HOST = "COM6"
 
 
 def main():
+    e = Event()
     q = Queue()
-    plotter = Plotter(q)
-    regulmanager = Regulmanager(plotter, q, HOST)
-    #regul = Regul(plotter, q, HOST)
-    #regul_thread = Thread(target = regul.run)
+
+    plotter = Plotter(q, e)
+
+    regulmanager = Regulmanager(plotter, q, HOST, e)
     regulmanager.start()
-    #plotter.start()
+
     plt.show()
 
-
-    #plotter.join()
-
 main()
-
