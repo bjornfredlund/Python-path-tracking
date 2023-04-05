@@ -12,6 +12,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.lines import Line2D
 from controllers import Stanley, Lqr
 from dataclasses import replace
+from threading import Event
 from data import Data
 from communication.uart import locate
 
@@ -22,8 +23,9 @@ ADJUST_SCALE = 0.5
 
 
 class Plotter:
-    def __init__(self, queue):
+    def __init__(self, queue, event):
         self.q = queue # queue to communicate with regulmanager
+        self.event = event # to interrupt regul
         self.d = Data() # data to share with regulmanager
         self.fig = plt.figure(figsize=(11,8)) # open matplotlib figure
         self.timestamp = 0
@@ -86,13 +88,13 @@ class Plotter:
         self.load_button = Button(self.ax_load, 'Load trajectory')
         self.radio_controller = RadioButtons(self.controller_ax, ('Stanley', 'LQR'))
 
-        # attach actionlistener
+        # attach actionlisteners
         self.load_button.on_clicked(self.load_custom_trajectory)
         self.go_button.on_clicked(self.go)
         self.radio_mode.on_clicked(self.wait_located)
 
         self.pos_artist, = self.ax.plot([], [], transform = ccrs.PlateCarree())
-        self.trajectory_artist, = self.ax.plot([], [], 'o',transform = ccrs.PlateCarree(), label='Waypoints')
+        self.trajectory_artist, = self.ax.plot([], [], '--',transform = ccrs.PlateCarree(), label='Waypoints')
 
 
         self.ax.add_line(self.pos_artist)
@@ -110,10 +112,10 @@ class Plotter:
         self.ax.plot(self.lng,self.lat, color='red', marker='x', ms=6, mew=2, transform=ccrs.PlateCarree())
 
     def go(self, event):
-
         self.d.mode = self.radio_mode.value_selected
         self.d.controller = self.radio_controller.value_selected
         if self.d.is_ready():
+            self.event.clear()
             self.q.put(self.d)
         else:
             print("Please select all options")
@@ -125,6 +127,7 @@ class Plotter:
         self.lng_pos.clear()
         self.lat_pos.clear()
         self.trajectory_artist.set_data([],[])
+        self.ref_artist.set_data([],[])
 
     def clear_plots(self):
         self.clear_pos()
@@ -138,8 +141,8 @@ class Plotter:
         self.speed_reference_history.clear()
 
     def load_custom_trajectory(self, event):
+        self.event.set()
         self.clear_plots()
-
         # generate
         #x_coords,y_coords = generate_sine()
         x_coords,y_coords = generate_tanh()
@@ -191,7 +194,7 @@ class Plotter:
             self.orientation_plot.set_xlim(self.time_history[0], self.time_history[0]+TIME_WINDOW)
 
         else:
-            if len(self.time_history) -1 > 0:
+            if len(self.time_history) - 1 > 0:
                 self.velocity_plot.set_xlim(0, max(self.time_history))
                 self.orientation_plot.set_xlim(0, max(self.time_history))
 
@@ -206,7 +209,6 @@ class Plotter:
         yaw = state.yaw
         v = state.v
         lat, lng = mycartopy.to_geographic_coordinates(x, y)
-
 
         self.update_pos(lat, lng)
 
@@ -230,12 +232,14 @@ class Plotter:
 
     def on_close(self, event):
         self.q.put(None)
+        self.event.set()
         #self.ani.save('./animation.gif', fps=10)
 
     def on_click(self, event):
         # did we click on the desired plot?
         if event.inaxes != self.ax:
             return
+        self.event.set()
 
         self.clear_plots()
         ix, iy = event.xdata, event.ydata
@@ -246,9 +250,14 @@ class Plotter:
 
         coords = [mycartopy.to_cartesian_coordinates(lng,lat) for lng, lat in zip(lng_path,lat_path)]
 
-        self.trajectory_artist.set_data(lng_path,lat_path)
-
         self.go_button.color = 'green'
 
         # load trajectory into data
         self.d.trajectory = Trajectory(coords)
+
+        # extract processed coords and plot
+        coords = self.d.trajectory.coords
+
+        coords = [mycartopy.to_geographic_coordinates(x, y) for x, y in coords]
+        lng_new, lat_new = zip(*coords)
+        self.trajectory_artist.set_data(lat_new,lng_new)
